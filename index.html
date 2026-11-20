@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>字卡传讯</title>
+<style>
+  :root{
+    --bg:#0d0d0f; --phone:#000; --top:#1c1c1e; --bubble-in:#26262a; --bubble-out:#0a84ff;
+    --text:#f2f2f7; --sub:#8e8e93; --line:#2c2c2e; --accent:#0a84ff; --danger:#ff453a;
+  }
+  body.light{
+    --bg:#e5e5ea; --phone:#fff; --top:#f7f7f7; --bubble-in:#e9e9eb; --bubble-out:#0a84ff;
+    --text:#000; --sub:#8e8e93; --line:#d1d1d6; --accent:#007aff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    background:radial-gradient(circle at 50% 0%,#1a1a22,#0d0d0f 70%);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex;align-items:center;justify-content:center;color:var(--text);
+    transition:background .3s;
+  }
+  body.light{background:radial-gradient(circle at 50% 0%,#f5f5f7,#d8d8de 70%)}
+
+  .phone{
+    width:390px;max-width:100vw;height:844px;max-height:100vh;
+    background:var(--phone);border-radius:44px;overflow:hidden;
+    display:flex;flex-direction:column;position:relative;
+    box-shadow:0 0 0 10px #1a1a1c,0 30px 80px rgba(0,0,0,.6);
+  }
+  @media(max-width:500px){
+    .phone{width:100vw;height:100vh;border-radius:0;box-shadow:none}
+  }
+
+  /* 顶部 */
+  .top{
+    background:var(--top);backdrop-filter:blur(20px);
+    padding:14px 16px 10px;display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid var(--line);flex-shrink:0;z-index:5;
+  }
+  .avatar{
+    width:38px;height:38px;border-radius:50%;background:#3a3a3c;
+    display:flex;align-items:center;justify-content:center;font-size:20px;
+    overflow:hidden;flex-shrink:0;border:1px solid var(--line);
+  }
+  .avatar img{width:100%;height:100%;object-fit:cover}
+  .name-wrap{flex:1;min-width:0}
+  .name{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .status{font-size:12px;color:var(--sub);margin-top:2px}
+  .icon-btn{
+    background:none;border:none;color:var(--accent);font-size:13px;
+    cursor:pointer;padding:6px 8px;border-radius:8px;
+  }
+  .icon-btn:active{background:rgba(128,128,128,.15)}
+
+  /* 消息区 */
+  .messages{
+    flex:1;overflow-y:auto;padding:16px 12px 8px;display:flex;flex-direction:column;gap:6px;
+    scroll-behavior:smooth;
+  }
+  .messages::-webkit-scrollbar{width:0}
+  .row{display:flex;width:100%}
+  .row.out{justify-content:flex-end}
+  .row.in{justify-content:flex-start}
+  .bubble{
+    max-width:78%;padding:9px 14px;border-radius:18px;font-size:15px;line-height:1.4;
+    word-break:break-word;white-space:pre-wrap;animation:pop .18s ease-out;
+  }
+  @keyframes pop{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+  .row.in .bubble{background:var(--bubble-in);border-bottom-left-radius:5px}
+  .row.out .bubble{background:var(--bubble-out);color:#fff;border-bottom-right-radius:5px}
+  .time-sep{text-align:center;font-size:11px;color:var(--sub);margin:10px 0 2px}
+
+  /* 输入区 */
+  .input-bar{
+    display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);background:var(--top);flex-shrink:0;align-items:flex-end;
+  }
+  .input-bar textarea{
+    flex:1;resize:none;border:1px solid var(--line);background:var(--phone);
+    color:var(--text);border-radius:20px;padding:10px 14px;font-size:15px;
+    font-family:inherit;max-height:120px;line-height:1.35;outline:none;
+  }
+  .input-bar textarea:focus{border-color:var(--accent)}
+  .send{
+    width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);
+    color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;display:flex;
+    align-items:center;justify-content:center;transition:opacity .2s;
+  }
+  .send:disabled{opacity:.35;cursor:default}
+
+  /* 弹层 */
+  .overlay{
+    position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+    z-index:20;display:none;align-items:center;justify-content:center;padding:20px;
+  }
+  .overlay.show{display:flex}
+  .modal{
+    background:var(--phone);border:1px solid var(--line);border-radius:20px;
+    width:100%;max-height:80%;display:flex;flex-direction:column;overflow:hidden;
+    animation:pop .2s ease-out;
+  }
+  .modal-head{
+    padding:16px 18px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;justify-content:space-between;flex-shrink:0;
+  }
+  .modal-head h3{margin:0;font-size:16px}
+  .modal-body{padding:16px 18px;overflow-y:auto;flex:1}
+  .modal-body label{display:block;font-size:12px;color:var(--sub);margin:12px 0 6px}
+  .modal-body label:first-child{margin-top:0}
+  .modal-body input,.modal-body textarea{
+    width:100%;background:var(--top);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;
+  }
+  .modal-body textarea{min-height:300px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5}
+  .modal-body input:focus,.modal-body textarea:focus{border-color:var(--accent)}
+  .modal-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:10px;flex-shrink:0}
+  .btn{
+    flex:1;padding:11px;border-radius:12px;border:none;font-size:15px;font-weight:600;
+    cursor:pointer;font-family:inherit;
+  }
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:var(--top);color:var(--text);border:1px solid var(--line)}
+  .btn.danger{background:var(--danger);color:#fff}
+  .hint{font-size:11px;color:var(--sub);margin-top:8px;line-height:1.5}
+  .err{color:var(--danger);font-size:12px;margin-top:8px;display:none}
+  .err.show{display:block}
+</style>
+</head>
+<body>
+<div class="phone">
+  <!-- 顶部 -->
+  <div class="top">
+    <div class="avatar" id="topAvatar">💬</div>
+    <div class="name-wrap">
+      <div class="name" id="topName">未命名</div>
+      <div class="status" id="topStatus">在线</div>
+    </div>
+    <button class="icon-btn" id="btnTheme">主题</button>
+    <button class="icon-btn" id="btnCards">字卡</button>
+    <button class="icon-btn" id="btnProfile">角色</button>
+  </div>
+
+  <!-- 消息 -->
+  <div class="messages" id="messages"></div>
+
+  <!-- 输入 -->
+  <div class="input-bar">
+    <textarea id="input" rows="1" placeholder="发消息…"></textarea>
+    <button class="send" id="send" disabled>↑</button>
+  </div>
+
+  <!-- 字卡编辑弹层 -->
+  <div class="overlay" id="cardsOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>字卡 JSON</h3>
+        <button class="icon-btn" id="closeCards">关闭</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="cardsJson" spellcheck="false"></textarea>
+        <div class="err" id="cardsErr"></div>
+        <div class="hint">
+          字段说明：<br>
+          <b>keywords</b>：关键词数组，消息包含任一即命中<br>
+          <b>replies</b>：回复数组，命中后随机选一条<br>
+          <b>priority</b>：数字，越大越优先（默认 0）<br>
+          <b>minHour / maxHour</b>：触发时间段（0-23，可省略；如 23 到 5 表示深夜）<br>
+          <b>cooldown</b>：冷却秒数，同一张卡触发后需等待（默认 0）<br>
+          <b>fallback</b>：设为 true 表示兜底卡（无关键词，未命中时使用）<br>
+          回复中可用变量：<code>{name}</code> 角色名、<code>{me}</code> 你的称呼、<code>{time}</code> 当前时间
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="exportCards">导出</button>
+        <button class="btn ghost" id="importCards">导入</button>
+        <button class="btn primary" id="saveCards">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 角色设置弹层 -->
+  <div class="overlay" id="profileOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>角色设置</h3>
+        <button class="icon-btn" id="closeProfile">关闭</button>
+      </div>
+      <div class="modal-body">
+        <label>角色名</label>
+        <input id="pName" placeholder="例如：他">
+        <label>状态文字</label>
+        <input id="pStatus" placeholder="在线">
+        <label>头像（emoji 或图片 URL）</label>
+        <input id="pAvatar" placeholder="💬 或 https://...">
+        <label>你的称呼（用于 {me}）</label>
+        <input id="pMe" placeholder="你">
+        <div class="hint">修改后点保存。头像填 URL 会以图片显示。</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn danger" id="clearChat">清空聊天</button>
+        <button class="btn primary" id="saveProfile">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".json,application/json" style="display:none">
+</div>
+
+<script>
+/* ============ 默认数据 ============ */
+const DEFAULT_PROFILE = {
+  name: "他",
+  status: "在线",
+  avatar: "💬",
+  me: "你"
+};
+
+const DEFAULT_CARDS = [
+  {
+    keywords: ["你好", "在吗", "hi", "hello"],
+    replies: ["嗯，在。", "……你来了。", "怎么突然找我。"],
+    priority: 5,
+    cooldown: 0
+  },
+  {
+    keywords: ["晚安", "睡了"],
+    replies: ["晚安。做个好梦。", "……早点睡，别熬夜。"],
+    priority: 8,
+    minHour: 21,
+    maxHour: 23,
+    cooldown: 60
+  },
+  {
+    keywords: ["早安", "早上好"],
+    replies: ["早。今天也起这么早。", "早安，{me}。"],
+    priority: 8,
+    minHour: 5,
+    maxHour: 10,
+    cooldown: 60
+  },
+  {
+    keywords: ["想你", "喜欢"],
+    replies: ["……突然说这个。", "嗯，我知道了。", "别闹。"],
+    priority: 6,
+    cooldown: 30
+  },
+  {
+    keywords: ["生气", "难过", "不开心", "哭"],
+    replies: ["怎么了？跟我说说。", "……过来。", "别一个人憋着。"],
+    priority: 9,
+    cooldown: 20
+  },
+  {
+    keywords: ["吃", "饭", "饿"],
+    replies: ["吃了吗？", "记得吃饭。", "想吃什么，我陪你。"],
+    priority: 3,
+    cooldown: 10
+  },
+  {
+    keywords: ["再见", "拜拜", "走了"],
+    replies: ["嗯，去吧。", "……路上小心。"],
+    priority: 6,
+    cooldown: 0
+  },
+  {
+    fallback: true,
+    replies: ["……", "嗯？", "你说什么，我没听清。", "（沉默）"],
+    priority: 0
+  }
+];
+
+/* ============ 存储 ============ */
+const LS_PROFILE = "dz_profile_v1";
+const LS_CARDS = "dz_cards_v1";
+const LS_CHAT = "dz_chat_v1";
+const LS_THEME = "dz_theme_v1";
+const LS_CD = "dz_cooldown_v1";
+
+function load(key, def){
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+  catch(e){ return def; }
+}
+function save(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+}
+
+let profile = load(LS_PROFILE, DEFAULT_PROFILE);
+let cards = load(LS_CARDS, DEFAULT_CARDS);
+let chat = load(LS_CHAT, []);
+let cooldownMap = load(LS_CD, {});
+
+/* ============ DOM ============ */
+const $ = id => document.getElementById(id);
+const messagesEl = $("messages");
+const inputEl = $("input");
+const sendBtn = $("send");
+
+/* ============ 渲染顶部 ============ */
+function isImg(s){ return /^(https?:\/\/|data:image)/.test(s || ""); }
+function renderProfile(){
+  $("topName").textContent = profile.name || "未命名";
+  $("topStatus").textContent = profile.status || "";
+  const av = $("topAvatar");
+  av.innerHTML = "";
+  if(isImg(profile.avatar)){
+    const img = document.createElement("img");
+    img.src = profile.avatar;
+    img.onerror = () => { av.textContent = "💬"; };
+    av.appendChild(img);
+  } else {
+    av.textContent = profile.avatar || "💬";
+  }
+}
+
+/* ============ 聊天渲染 ============ */
+function formatTime(ts){
+  const d = new Date(ts);
+  const h = String(d.getHours()).padStart(2,"0");
+  const m = String(d.getMinutes()).padStart(2,"0");
+  return h + ":" + m;
+}
+function renderChat(){
+  messagesEl.innerHTML = "";
+  let lastTs = 0;
+  chat.forEach(msg => {
+    if(msg.ts - lastTs > 5*60*1000){
+      const sep = document.createElement("div");
+      sep.className = "time-sep";
+      sep.textContent = formatTime(msg.ts);
+      messagesEl.appendChild(sep);
+    }
+    lastTs = msg.ts;
+    const row = document.createElement("div");
+    row.className = "row " + (msg.from === "me" ? "out" : "in");
+    const b = document.createElement("div");
+    b.className = "bubble";
+    b.textContent = msg.text;
+    row.appendChild(b);
+    messagesEl.appendChild(row);
+  });
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+/* ============ 变量替换 ============ */
+function fillVars(text){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,"0");
+  const mm = String(now.getMinutes()).padStart(2,"0");
+  return text
+    .replace(/\{name\}/g, profile.name || "")
+    .replace(/\{me\}/g, profile.me || "你")
+    .replace(/\{time\}/g, hh + ":" + mm);
+}
+
+/* ============ 匹配逻辑 ============ */
+function inTimeRange(hour, minH, maxH){
+  if(minH == null || maxH == null) return true;
+  if(minH <= maxH) return hour >= minH && hour <= maxH;
+  // 跨午夜，如 23-5
+  return hour >= minH || hour <= maxH;
+}
+
+function pickReply(userText){
+  const hour = new Date().getHours();
+  const now = Date.now();
+
+  // 1. 过滤可触发卡
+  const candidates = [];
+  cards.forEach((card, idx) => {
+    if(card.fallback) return;
+    if(!card.keywords || !card.keywords.length) return;
+    if(!card.replies || !card.replies.length) return;
+    if(!inTimeRange(hour, card.minHour, card.maxHour)) return;
+
+    // 冷却
+    const cdKey = "c" + idx;
+    if(card.cooldown > 0 && cooldownMap[cdKey]){
+      if(now - cooldownMap[cdKey] < card.cooldown * 1000) return;
+    }
+
+    // 关键词命中
+    const hit = card.keywords.some(k => k && userText.includes(k));
+    if(hit) candidates.push({card, idx});
+  });
+
+  // 2. 按 priority 排序
+  candidates.sort((a,b) => (b.card.priority||0) - (a.card.priority||0));
+
+  let chosen = null;
+  if(candidates.length){
+    const topPri = candidates[0].card.priority || 0;
+    const topGroup = candidates.filter(c => (c.card.priority||0) === topPri);
+    const picked = topGroup[Math.floor(Math.random()*topGroup.length)];
+    chosen = picked.card;
+    // 记录冷却
+    if(chosen.cooldown > 0) cooldownMap["c"+picked.idx] = now;
+  } else {
+    // 3. 兜底
+    const fallbacks = cards.filter(c => c.fallback && c.replies && c.replies.length);
+    if(fallbacks.length){
+      chosen = fallbacks[Math.floor(Math.random()*fallbacks.length)];
+    }
+  }
+
+  if(!chosen || !chosen.replies.length) return "……";
+
+  const reply = chosen.replies[Math.floor(Math.random()*chosen.replies.length)];
+  save(LS_CD, cooldownMap);
+  return fillVars(reply);
+}
+
+/* ============ 发送 ============ */
+function sendMessage(){
+  const text = inputEl.value.trim();
+  if(!text) return;
+
+  chat.push({from:"me", text, ts: Date.now()});
+  inputEl.value = "";
+  autoResize();
+  updateSendBtn();
+  save(LS_CHAT, chat);
+  renderChat();
+
+  // 模拟打字延迟
+  const delay = 500 + Math.random()*900;
+  setTimeout(() => {
+    const reply = pickReply(text);
+    chat.push({from:"them", text: reply, ts: Date.now()});
+    save(LS_CHAT, chat);
+    renderChat();
+  }, delay);
+}
+
+/* ============ 输入框 ============ */
+function autoResize(){
+  inputEl.style.height = "auto";
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+}
+function updateSendBtn(){
+  sendBtn.disabled = !inputEl.value.trim();
+}
+inputEl.addEventListener("input", () => { autoResize(); updateSendBtn(); });
+inputEl.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){
+    e.preventDefault();
+    if(!sendBtn.disabled) sendMessage();
+  }
+});
+sendBtn.addEventListener("click", sendMessage);
+
+/* ============ 字卡弹层 ============ */
+$("btnCards").addEventListener("click", () => {
+  $("cardsJson").value = JSON.stringify(cards, null, 2);
+  $("cardsErr").classList.remove("show");
+  $("cardsOverlay").classList.add("show");
+});
+$("closeCards").addEventListener("click", () => $("cardsOverlay").classList.remove("show"));
+
+$("saveCards").addEventListener("click", () => {
+  try{
+    const parsed = JSON.parse($("cardsJson").value);
+    if(!Array.isArray(parsed)) throw new Error("必须是数组");
+    cards = parsed;
+    save(LS_CARDS, cards);
+    cooldownMap = {};
+    save(LS_CD, cooldownMap);
+    $("cardsErr").classList.remove("show");
+    $("cardsOverlay").classList.remove("show");
+    alert("字卡已保存");
+  }catch(e){
+    const err = $("cardsErr");
+    err.textContent = "JSON 格式错误：" + e.message;
+    err.classList.add("show");
+  }
+});
+
+$("exportCards").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(cards, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "字卡_" + new Date().toISOString().slice(0,10) + ".json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$("importCards").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    $("cardsJson").value = ev.target.result;
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+/* ============ 角色弹层 ============ */
+$("btnProfile").addEventListener("click", () => {
+  $("pName").value = profile.name || "";
+  $("pStatus").value = profile.status || "";
+  $("pAvatar").value = profile.avatar || "";
+  $("pMe").value = profile.me || "";
+  $("profileOverlay").classList.add("show");
+});
+$("closeProfile").addEventListener("click", () => $("profileOverlay").classList.remove("show"));
+
+$("saveProfile").addEventListener("click", () => {
+  profile = {
+    name: $("pName").value.trim() || "他",
+    status: $("pStatus").value.trim(),
+    avatar: $("pAvatar").value.trim() || "💬",
+    me: $("pMe").value.trim() || "你"
+  };
+  save(LS_PROFILE, profile);
+  renderProfile();
+  $("profileOverlay").classList.remove("show");
+});
+
+$("clearChat").addEventListener("click", () => {
+  if(confirm("确定清空全部聊天记录？")){
+    chat = [];
+    save(LS_CHAT, chat);
+    renderChat();
+    $("profileOverlay").classList.remove("show");
+  }
+});
+
+/* ============ 主题 ============ */
+function applyTheme(){
+  const t = load(LS_THEME, "dark");
+  document.body.classList.toggle("light", t === "light");
+}
+$("btnTheme").addEventListener("click", () => {
+  const cur = load(LS_THEME, "dark");
+  const next = cur === "dark" ? "light" : "dark";
+  save(LS_THEME, next);
+  applyTheme();
+});
+
+/* ============ 初始化 ============ */
+applyTheme();
+renderProfile();
+renderChat();
+autoResize();
+updateSendBtn();
+</script>
+</body>
+</html>
